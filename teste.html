@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>FinanPro Online</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{margin:0;font-family:Arial;background:#0b0f14;color:#e5e7eb}
+.container{max-width:1000px;margin:auto;padding:20px}
+h1{color:#3b82f6}
+input,select,button{padding:8px;border-radius:8px;border:1px solid #1f2937;background:#111827;color:#fff}
+button{background:#3b82f6;font-weight:bold;cursor:pointer}
+table{width:100%;border-collapse:collapse;margin-top:15px}
+th,td{padding:8px;border-bottom:1px solid #1f2937}
+.login{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0b0f14}
+.loginBox{background:#111827;padding:30px;border-radius:12px;border:1px solid #1f2937;width:280px}
+.card{background:#111827;padding:15px;border-radius:10px;margin-top:20px;border:1px solid #1f2937}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login" id="loginScreen">
+  <div class="loginBox">
+    <h2>🔐 FinanPro</h2>
+    <input id="loginUser" placeholder="Usuário"><br><br>
+    <input id="loginPass" type="password" placeholder="Senha"><br><br>
+    <button onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<div class="container" id="app" style="display:none">
+
+<h1>📊 FinanPro Online</h1>
+
+<!-- CADASTRO CATEGORIA -->
+<div class="card">
+<h3>Categorias</h3>
+<input id="catNome" placeholder="Nova categoria">
+<button onclick="addCategoria()">Adicionar</button>
+<ul id="listaCategorias"></ul>
+</div>
+
+<!-- NOVO LANÇAMENTO -->
+<div class="card">
+<h3>Novo Lançamento</h3>
+<select id="tipo">
+  <option value="R">Receita</option>
+  <option value="D">Despesa</option>
+</select>
+<input type="date" id="data">
+<input id="descricao" placeholder="Descrição">
+<input type="number" id="valor" placeholder="Valor">
+<select id="categoria"></select>
+<select id="pago">
+  <option value="true">Pago</option>
+  <option value="false">Em aberto</option>
+</select>
+<button onclick="salvar()">Salvar</button>
+</div>
+
+<!-- TABELA -->
+<div class="card">
+<h3>Lançamentos</h3>
+<table>
+<thead>
+<tr>
+<th>Tipo</th><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Status</th><th>Ação</th>
+</tr>
+</thead>
+<tbody id="lista"></tbody>
+</table>
+</div>
+
+<!-- RELATORIOS -->
+<div class="card">
+<h3>Relatórios</h3>
+<canvas id="graficoPizza"></canvas>
+<br>
+<canvas id="graficoLinha"></canvas>
+</div>
+
+</div>
+
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import {
+ getFirestore, collection, addDoc, getDocs,
+ deleteDoc, doc, query, orderBy
+} from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+
+const firebaseConfig = {
+ apiKey: "AIzaSyANJQ73WmP4ZQz0fbWNX9PUSi4udwFK9w8",
+ authDomain: "finanpro-a98b3.firebaseapp.com",
+ projectId: "finanpro-a98b3",
+ storageBucket: "finanpro-a98b3.appspot.com",
+ messagingSenderId: "888019234818",
+ appId: "1:888019234818:web:438c3b8cd1576b5a97b71b"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ===== LOGIN =====
+const USER="breno", PASS="1290";
+window.doLogin = ()=>{
+ const u=document.getElementById("loginUser").value;
+ const p=document.getElementById("loginPass").value;
+ if(u===USER && p===PASS){
+   sessionStorage.setItem("logado","1");
+   iniciar();
+ } else alert("Login inválido");
+}
+function iniciar(){
+ document.getElementById("loginScreen").style.display="none";
+ document.getElementById("app").style.display="block";
+ carregarCategorias();
+ carregarLancamentos();
+}
+if(sessionStorage.getItem("logado")==="1") iniciar();
+
+// ===== CATEGORIAS =====
+window.addCategoria = async ()=>{
+ const nome=document.getElementById("catNome").value;
+ if(!nome) return;
+ await addDoc(collection(db,"categorias"),{nome});
+ document.getElementById("catNome").value="";
+ carregarCategorias();
+}
+
+async function carregarCategorias(){
+ const lista=document.getElementById("listaCategorias");
+ const select=document.getElementById("categoria");
+ lista.innerHTML=""; select.innerHTML="";
+ const snap=await getDocs(collection(db,"categorias"));
+ snap.forEach(d=>{
+   const li=document.createElement("li");
+   li.innerHTML = d.data().nome + ` <button onclick="delCat('${d.id}')">❌</button>`;
+   lista.appendChild(li);
+   const op=document.createElement("option");
+   op.value=d.id; op.textContent=d.data().nome;
+   select.appendChild(op);
+ });
+}
+
+window.delCat = async(id)=>{
+ await deleteDoc(doc(db,"categorias",id));
+ carregarCategorias();
+}
+
+// ===== LANÇAMENTOS =====
+window.salvar = async ()=>{
+ const tipo=document.getElementById("tipo").value;
+ const data=document.getElementById("data").value;
+ const descricao=document.getElementById("descricao").value;
+ const valor=Number(document.getElementById("valor").value);
+ const categoria=document.getElementById("categoria").value;
+ const pago=document.getElementById("pago").value==="true";
+ if(!descricao || !valor) return alert("Preencha tudo");
+ await addDoc(collection(db,"lancamentos"),{
+   tipo,data,descricao,valor,categoria,pago,createdAt:new Date()
+ });
+ document.getElementById("descricao").value="";
+ document.getElementById("valor").value="";
+ carregarLancamentos();
+}
+
+async function carregarLancamentos(){
+ const tbody=document.getElementById("lista");
+ tbody.innerHTML="";
+ let receitas=0, despesas=0;
+ const q=query(collection(db,"lancamentos"),orderBy("createdAt","desc"));
+ const snap=await getDocs(q);
+ snap.forEach(d=>{
+   const t=d.data();
+   if(t.tipo==="R") receitas+=t.valor;
+   else despesas+=t.valor;
+   const tr=document.createElement("tr");
+   tr.innerHTML=`
+    <td>${t.tipo==="R"?"Receita":"Despesa"}</td>
+    <td>${t.data}</td>
+    <td>${t.descricao}</td>
+    <td>${t.categoria}</td>
+    <td>R$ ${t.valor.toFixed(2)}</td>
+    <td>${t.pago?"Pago":"Aberto"}</td>
+    <td><button onclick="excluir('${d.id}')">🗑️</button></td>
+   `;
+   tbody.appendChild(tr);
+ });
+ gerarGraficos(receitas,despesas);
+}
+
+window.excluir = async(id)=>{
+ await deleteDoc(doc(db,"lancamentos",id));
+ carregarLancamentos();
+}
+
+// ===== GRAFICOS =====
+let pizza, linha;
+function gerarGraficos(receitas,despesas){
+ const ctx1=document.getElementById("graficoPizza");
+ if(pizza) pizza.destroy();
+ pizza=new Chart(ctx1,{
+   type:"pie",
+   data:{
+     labels:["Receitas","Despesas"],
+     datasets:[{data:[receitas,despesas],backgroundColor:["#10b981","#ef4444"]}]
+   }
+ });
+
+ const ctx2=document.getElementById("graficoLinha");
+ if(linha) linha.destroy();
+ linha=new Chart(ctx2,{
+   type:"bar",
+   data:{
+     labels:["Receitas","Despesas"],
+     datasets:[{data:[receitas,despesas],backgroundColor:["#3b82f6","#f59e0b"]}]
+   }
+ });
+}
+</script>
+</body>
+</html>
